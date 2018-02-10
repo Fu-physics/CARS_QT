@@ -110,8 +110,6 @@ for i in signal_list:
 
 plt.plot(dic["wavenumber"], signal, label = 'signal')
 
-#plt.xlim((xmin, xmax))
-
 plt.legend()
 plt.xlabel('Wavenumber (cm$^{-1}$)')
 plt.ylabel('KK-Retrieved Spectrum (au)')
