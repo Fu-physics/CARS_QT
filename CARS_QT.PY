@@ -37,7 +37,7 @@ import matplotlib.animation as animation
 
 ###   homemade package
 
-from Cars_Class import  CARS
+from Cars_Class import  CARS, KK_ALS_Spectral
 
 progname = os.path.basename(sys.argv[0])
 progversion = "0.1"
@@ -98,15 +98,9 @@ class MyTableWidget(QWidget):
         self.button_openBackgroundfile.clicked.connect(self.openFileNameDialog) 
         self.button_openSignalfile = QPushButton('Open Signal File')           # Just some button connected to `plot` method
         self.button_openSignalfile.clicked.connect(self.openFileNameDialog) 
-
-
-
         
         self.tab1_layout_L.addWidget(self.button_openBackgroundfile)
         self.tab1_layout_L.addWidget(self.button_openSignalfile)
-
-
-
 
         self.tab1_layout_R = QVBoxLayout(self)
 
@@ -134,10 +128,31 @@ class MyTableWidget(QWidget):
         #self.tab1_layout.addStretch()
         self.tab1_layout.addLayout(self.tab1_layout_R)
 
-        self.tab1.setLayout(self.tab1_layout)              # set tab2.layout to be the layout of tab_2 
+        self.tab1.setLayout(self.tab1_layout)              # set tab1.layout to be the layout of tab_1 
 
     def initalUI_tab_2(self):
-        pass
+        #################### Create Plot cavas widget ###################################################
+                                                         # Create first tab
+        self.tab2_layout = QVBoxLayout(self)             # create a Layout, which will be setted for tab_2
+
+
+        self.tab2PlotUp = plt.figure("Background and Singal")
+        self.add_plotfigure(self.tab2PlotUp, self.tab2_layout)
+        tab2Axes_Up = self.tab2PlotUp.add_subplot(111)
+
+        self.tab2buttonPlotUp = QPushButton('Plot Back + Siganl')           #  Just some button connected to `plot` method 
+        self.tab2buttonPlotUp.clicked.connect(self.test_fun(tab2Axes_Up, "Background and Singal"))
+
+
+        self.button_CARS2SPET = QPushButton('CARS --> SPET')           # Just some button connected to `plot` method
+        self.button_CARS2SPET.clicked.connect(self.CARS2SPET) 
+        
+        self.tab2_layout.addWidget(self.tab2buttonPlotUp)
+        self.tab2_layout.addWidget(self.button_CARS2SPET)
+
+
+        self.tab2.setLayout(self.tab2_layout)              # set tab1.layout to be the layout of tab_1 
+
     def openFileNameDialog(self):    
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
@@ -151,53 +166,73 @@ class MyTableWidget(QWidget):
         def inner_test_fun():
             
             print("dataName", dataName)
-            
-            ## read the data 
-            app = CARS()
-            self.dicData, self.dicDataNorm = app.loadData(self.fileName)
 
-            WN = self.dicDataNorm["wavenumber"]
-            averageIntensity =  0.0 * self.dicDataNorm["wavenumber"]
-
-            ## then plot the data
-            for key, value in self.dicDataNorm.items():
-                if (key != "wavenumber" and key != "wavelength"):
-                    print(key)
-                    axes.plot(WN, value, label = key)
-                    averageIntensity += value
-                
-            # there are two list that are not the intensity data  
-            # dicDataNorm["wavenumber"] and dicDataNorm["wavelength"]
-            
-            averageIntensity =  averageIntensity/(len(self.dicDataNorm) - 2)
-            axes.plot(WN, averageIntensity, label = "averageIntensity")
-
-            print(averageIntensity)
             # save the background data and signal data, which will be used to get the spectrume.
-            if dataName == "background":
-                self.backgroundData = averageIntensity
-            elif dataName == "signal":
-                self.signal = averageIntensity
+            if dataName == "background" or dataName == "signal":
+                ## read the file that you just open
+                self.readfile()
+
+                if dataName == "background":
+                    #print("background")
+                    self.background = self.dicDataNorm["averageIntensity"]
+                    #print(self.background)
+                elif dataName == "signal":
+                    #print("signal")
+                    self.signal = self.dicDataNorm["averageIntensity"]
+                    #print(self.signal)
+
+                for key, value in self.dicDataNorm.items():
+                    if (key != "wavenumber" and key != "wavelength"):
+                        print(key)
+                        axes.plot(self.WN, value, label = key)
+
+            elif dataName == "Background and Singal":
+
+                axes.plot(self.WN, self.signal, label = "signal")
+                axes.plot(self.WN, self.background, label = "background")
+
+                pass
+            
             
             axes.legend()
-            #axes.set_xlim([1000, 1500])
             axes.set_xlabel('Wavenumber (cm$^{-1}$)')
             axes.set_ylabel('Spectrum (au)')
 
         return inner_test_fun
 
-    def CARS2SPET():
-         print(self.backgroundData)
-         print(self.signal)
+    def CARS2SPET(self):
 
-         
+        self.finalPlot = plt.figure("CARS2SPET")
+
+        self.finalAxes = self.finalPlot.add_subplot(111)
+        self.finalAxes.plot(self.backgroundData)
+
+        #self.finalAxes.figure.canvas.draw()
+        #plt.draw()
+
+        #print(self.backgroundData)
+        #print(self.signal)
 
     
     def readfile(self):
-        app = CARS()
-        FileName = self.fileName
-        self.dicData, self.dicDataNorm = app.loadData(FileName)
-        print("self.dicDataNorm is: ", self.dicDataNorm )
+            ## read the data 
+            app = CARS()
+            self.dicData, self.dicDataNorm = app.loadData(self.fileName)
+
+            self.WN = self.dicDataNorm["wavenumber"]
+            averageIntensity =  0.0 * self.dicDataNorm["wavenumber"]
+
+            ## then plot the data
+            for key, value in self.dicDataNorm.items():
+                if (key != "wavenumber" and key != "wavelength"):
+                    averageIntensity += value
+                
+            # there are two list that are not the intensity data  
+            # dicDataNorm["wavenumber"] and dicDataNorm["wavelength"]
+            # add the "averageIntensity" to dicDataNorm,  which will be used to calculate the spectrum
+            self.dicDataNorm["averageIntensity"] = averageIntensity/(len(self.dicDataNorm) - 2)
+            #print("averageIntensity is ", self.dicDataNorm["averageIntensity"])
+
 
         #dicSignal, dicSignalNorm = app.loadData('spectra_signal.xlsx')
         #return dicBackground, dicBackgroundNorm

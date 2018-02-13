@@ -12,6 +12,7 @@ from openpyxl import load_workbook
 import als_methods as als
 import pre as crikit
 
+
 class CARS():
     def __init__(self):
         pass
@@ -109,13 +110,70 @@ class CARS():
         plt.show()
     
 class KK_ALS_Spectral():
-    
-    def __init__(self):
-        self.I_CARS = dic_norm[matter]/dic_norm["background"]
-        self.I_NRB = np.zeros(len(dic_norm[matter])) +1
-        self.I_REF = np.zeros(len(dic_norm[matter])) +1(self, parameter_list):
-                
 
+    def __init__(self, signalDivBackground):
+        self.I_CARS = signalDivBackground
+        self.I_REF = np.zeros(len(signalDivBackground)) + 1
+        self.Kramers_Kronig()
+
+    def Kramers_Kronig(self):
+
+        PHASE_OFFSET = 0 # DC phase-offset (default = 0)
+        NORM_BY_NRB = 1 # Normalize retrieved spectrum by NRB/REF-- Removes the optical system response (default = 1)
+
+        # Perform the Kramers-Kronig Relationship when using a surrogate NRB "reference"
+        self.Retrieved_complex_spectrum_w_reference = crikit.kkrelation(self.I_REF,self.I_CARS, PHASE_OFFSET,NORM_BY_NRB) # Complex spectrum
+        self.Retrieved_Raman_spectrum_w_reference = self.Retrieved_complex_spectrum_w_reference.imag # "Raman-like# (imag{complex spectrum})
+
+        self.Retrieved_complex_spectrum_w_reference.imag = - self.Retrieved_complex_spectrum_w_reference.imag;
+    
+
+    def ALS(self):
+        
+        SMOOTHNESS_PARAM = 1e3
+        ASYM_PARAM = 1e-4
+        [Baseline, als_method] = als.als_baseline(np.angle(self.Retrieved_complex_spectrum_w_reference), SMOOTHNESS_PARAM, \
+                                             ASYM_PARAM)
+
+        # Error phase (baseline) and amplitude connected via Kramers-Kronig relation (Hilbert transform)
+        Error_phase = Baseline
+        Error_amp = np.exp(crikit.hilbertfft(Error_phase).imag)
+        Correction_factor_1 = 1/Error_amp * np.exp(-1j*Error_phase)
+
+        Phase_Corrected = self.Retrieved_complex_spectrum_w_reference*Correction_factor_1
+
+        # Amiguity in phase-amp correction found by looking at mean-trend line of real componenet
+        # Using low-order, large-window Savitky-Golay
+        SGOLAY_WINDOW = 601
+        SGOLAY_POLY_ORDER = 2
+
+        Scaling_factor = 1/(scipy.signal.savgol_filter(np.real(Phase_Corrected),SGOLAY_WINDOW,SGOLAY_POLY_ORDER,axis=0))
+
+        Corrected = Scaling_factor*Phase_Corrected
+
+        # Compare these results with traditional baseline detrending of the Raman-like spectrum retrieved
+        # directly from the Kramers-Kronig relation
+        Just_amplitude_corrected = self.Retrieved_Raman_spectrum_w_reference - als.als_baseline(self.Retrieved_Raman_spectrum_w_reference,1e3,1e-4)[0]
+
+
+        """
+        These are defined earlier:
+        SMOOTHNESS_PARAM
+        ASYM_PARAM
+        SGOLAY_WINDOW
+        SGOLAY_POLY_ORDER
+        """
+        # Starts here
+        Error_phase = als.als_baseline(np.angle(self.Retrieved_complex_spectrum_w_reference), SMOOTHNESS_PARAM,ASYM_PARAM)[0]
+        Phase_Corrected = self.Retrieved_complex_spectrum_w_reference*(1/np.exp(crikit.hilbertfft(Error_phase).imag) * \
+                                                                np.exp(-1j*Error_phase))
+        Corrected = 1/(scipy.signal.savgol_filter(np.real(Phase_Corrected),601,2,axis=0))*Phase_Corrected
+        # Done
+
+        Just_amplitude_corrected = self.Retrieved_Raman_spectrum_w_reference - \
+            als.als_baseline(self.Retrieved_Raman_spectrum_w_reference,1e3,1e-4)[0]
+
+        return Corrected.imag, Just_amplitude_corrected
 
 
 
@@ -125,9 +183,27 @@ if __name__ == '__main__':
     dicBackground, dicBackgroundNorm = app.loadData('spectra_background.xlsx')
     dicSignal, dicSignalNorm = app.loadData('spectra_signal.xlsx')
 
-    fig = plt.figure(figsize=[12, 6])
 
-    app.plotPredata(dicSignalNorm, fig)
+    #fig = plt.figure(figsize=[12, 6])
+    #app.plotPredata(dicSignalNorm, fig)
+
+    signalDivBackground = dicBackgroundNorm['background_1']/dicSignalNorm['signal_1']
+    print("signalDivBackground is: ", signalDivBackground)
+
+    specturmMethod = KK_ALS_Spectral(signalDivBackground)
+    spect_1, spect_2 = specturmMethod.ALS()
+
+    plt.figure(figsize=[10, 4])
+    plt.rc('font',size=12)
+    plt.plot(spect_1, label='Phase Corrected + Scaling')
+    plt.plot(spect_2, label = 'Baseline Detrended (only)')
+    #plt.plot(WN,CHI_R.imag/np.abs(CHI_NR), 'r--', label = 'Ideal')
+    plt.xlabel('Wavenumber (cm$^{-1}$)')
+    plt.ylabel('Intensity (au)')
+    plt.title('Spectrum', fontsize = 14)
+    plt.legend(frameon = False)
+    plt.show()
+
     #app.plotPredata(dicBackgroundNorm, fig)
     #print("dic is:", dic)
     #print("dic_normal is:", dic_norm)
