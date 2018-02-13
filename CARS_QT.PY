@@ -35,6 +35,10 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
+###   homemade package
+
+from Cars_Class import  CARS
+
 progname = os.path.basename(sys.argv[0])
 progversion = "0.1"
 
@@ -61,6 +65,9 @@ class MyTableWidget(QWidget):
  
     def __init__(self, parent):   
         super(QWidget, self).__init__(parent)
+
+        self.fileName = ''
+
         
         self.layout = QVBoxLayout(self)           # create a Layout, which will be setted for self
 
@@ -78,7 +85,7 @@ class MyTableWidget(QWidget):
         self.setLayout(self.layout)
 
         self.initalUI_tab_1()
-        #self.initalUI_tab_2()
+        self.initalUI_tab_2()
 
     def initalUI_tab_1(self):
         #################### Create Plot cavas widget ###################################################
@@ -87,31 +94,50 @@ class MyTableWidget(QWidget):
 
         self.tab1_layout_L = QVBoxLayout(self)
 
-        self.button_openfile = QPushButton('Open file')           # Just some button connected to `plot` method
-        self.button_openfile.clicked.connect(self.openFileNameDialog) 
+        self.button_openBackgroundfile = QPushButton('Open Background File')           # Just some button connected to `plot` method
+        self.button_openBackgroundfile.clicked.connect(self.openFileNameDialog) 
+        self.button_openSignalfile = QPushButton('Open Signal File')           # Just some button connected to `plot` method
+        self.button_openSignalfile.clicked.connect(self.openFileNameDialog) 
 
-        self.button_readfile = QPushButton('Read file')           # Just some button connected to `plot` method
-        self.button_readfile.clicked.connect(self.readfile)
+
+
         
-        self.display_inf = QPushButton("Display Inf.")
-        self.display_inf.clicked.connect(self.showdialog)
+        self.tab1_layout_L.addWidget(self.button_openBackgroundfile)
+        self.tab1_layout_L.addWidget(self.button_openSignalfile)
 
-        self.tab1_layout_L.addWidget(self.button_openfile)
-        self.tab1_layout_L.addWidget(self.button_readfile)
 
 
 
         self.tab1_layout_R = QVBoxLayout(self)
-        self.tab1_layout_R.addWidget(self.display_inf)
+
+        self.plotUp = plt.figure("Background")
+
+        axes_Up = self.plotUp.add_subplot(111)
+
+        self.add_plotfigure(self.plotUp, self.tab1_layout_R)
+        
+        self.buttonPlotUp = QPushButton('Plot')           #  Just some button connected to `plot` method 
+        self.buttonPlotUp.clicked.connect(self.test_fun(axes_Up, "background"))
+        self.tab1_layout_R.addWidget(self.buttonPlotUp)
+
+        self.plotDown = plt.figure("Signal")
+        axes_Down = self.plotDown.add_subplot(111)
+
+        self.add_plotfigure(self.plotDown, self.tab1_layout_R)
+        
+        self.buttonPlotDown = QPushButton('Plot')           # Just some button connected to `plot` method 
+        self.buttonPlotDown.clicked.connect(self.test_fun(axes_Down, "signal")) 
+        self.tab1_layout_R.addWidget(self.buttonPlotDown)
+
 
         self.tab1_layout.addLayout(self.tab1_layout_L)
-        self.tab1_layout.addStretch()
+        #self.tab1_layout.addStretch()
         self.tab1_layout.addLayout(self.tab1_layout_R)
 
         self.tab1.setLayout(self.tab1_layout)              # set tab2.layout to be the layout of tab_2 
 
-    #def initalUI_tab_2(self):
-    #    pass
+    def initalUI_tab_2(self):
+        pass
     def openFileNameDialog(self):    
         options = QFileDialog.Options()
         options |= QFileDialog.DontUseNativeDialog
@@ -119,67 +145,63 @@ class MyTableWidget(QWidget):
         if self.fileName:
             print(self.fileName)
         
-    def test_fun(self):
-        pass
 
+    def test_fun(self, axes, dataName):
+
+        def inner_test_fun():
+            
+            print("dataName", dataName)
+            
+            ## read the data 
+            app = CARS()
+            self.dicData, self.dicDataNorm = app.loadData(self.fileName)
+
+            WN = self.dicDataNorm["wavenumber"]
+            averageIntensity =  0.0 * self.dicDataNorm["wavenumber"]
+
+            ## then plot the data
+            for key, value in self.dicDataNorm.items():
+                if (key != "wavenumber" and key != "wavelength"):
+                    print(key)
+                    axes.plot(WN, value, label = key)
+                    averageIntensity += value
+                
+            # there are two list that are not the intensity data  
+            # dicDataNorm["wavenumber"] and dicDataNorm["wavelength"]
+            
+            averageIntensity =  averageIntensity/(len(self.dicDataNorm) - 2)
+            axes.plot(WN, averageIntensity, label = "averageIntensity")
+
+            print(averageIntensity)
+            # save the background data and signal data, which will be used to get the spectrume.
+            if dataName == "background":
+                self.backgroundData = averageIntensity
+            elif dataName == "signal":
+                self.signal = averageIntensity
+            
+            axes.legend()
+            #axes.set_xlim([1000, 1500])
+            axes.set_xlabel('Wavenumber (cm$^{-1}$)')
+            axes.set_ylabel('Spectrum (au)')
+
+        return inner_test_fun
+
+    def CARS2SPET():
+         print(self.backgroundData)
+         print(self.signal)
+
+         
+
+    
     def readfile(self):
-        ##  --------------------------------------               Import the xlsx file
-        W = load_workbook(self.fileName)
-        p = W.get_sheet_by_name(name = 'Sheet1')
+        app = CARS()
+        FileName = self.fileName
+        self.dicData, self.dicDataNorm = app.loadData(FileName)
+        print("self.dicDataNorm is: ", self.dicDataNorm )
 
-        a=[]
-
-        for row in p.iter_rows():
-            for k in row:
-                a.append(k.internal_value)
-
-        data = np.resize(a, [int(len(a)/15), 15])
-
-        print("The dictionary name list is:\n", data[0,:])
-
-
-        ##   --------------------------                       Function defination
-        def nm2wavenumber(pump, antistokes):
-            return 10**7*(1/np.array(antistokes) - 1/pump)
-        def area(x):
-            return np.sum(x)
-
-
-        ##   -------------------------                       reshape the data to dictionary, and normalized the data which makes the area of each plot to unit 1;
-        dic ={}
-        for i in range(15):
-            dic[data[0,i]] = data[1:2001,i].astype(np.float)
-
-
-        dic_norm = {}  ## nornalized data dictionary
-        for i in dic:
-            #print(area(dic[i]))
-            dic_norm[i] = dic[i]/area(dic[i])
-        dic_norm["wavenumber"] = nm2wavenumber(1064, dic[data[0,0]])
-
-        WN = dic_norm["wavenumber"]   ## wavenumber
-
-
-                    ## the data list that we are intrested in, after delete bad data.
-        background_list = ["background_1", "background_2", "background_3", "background_4", "background_5", 
-        "background_6", "background_7", "background_8", "background_9"]
-
-        signal_list = ["signal_1", "signal_2", "signal_3", "signal_4", "signal_5"]
-
-        background =  0.0*dic_norm["background_1"]
-        for i in background_list:
-            background += dic_norm[i]
-        background = background/len(background_list)     ## The average of background_list, which will be used as the background data.
-
-        signal =  0.0*dic_norm["signal_1"]
-        for i in signal_list:
-            signal += dic_norm[i]
-        signal = signal/len(signal_list)
-
-        print("Number of background data is:", len(background_list))
-        print("background is:", background)
-        print("Number of signal data is:", len(signal_list))
-        print("signal is:", signal)
+        #dicSignal, dicSignalNorm = app.loadData('spectra_signal.xlsx')
+        #return dicBackground, dicBackgroundNorm
+    
     
     def showdialog(self):
         msg = QMessageBox()
@@ -190,15 +212,25 @@ class MyTableWidget(QWidget):
         msg.setWindowTitle("MessageBox demo")
         msg.setDetailedText("The details are as follows:")
         msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-        msg.buttonClicked.connect(self.msgbtn)
-            
-        retval = msg.exec_()
-        print("value of pressed message box button:", retval)
-    def msgbtn(i):
-        print ("Button pressed is:",i.text())
 
 
+    def add_plotfigure(self, figureName, plot_layout):
+        #self.figureName = plt.figure()                      # a figure instance to plot on
+                                                            #if put "plt.ion" on the head, which will make two more figures idependently.
+
+        # this is the Canvas Widget that displays the `figure`, it takes the `figure` instance as a parameter to __init__
+        canvas_figureName = FigureCanvas(figureName)
+        toolbar_figureName = NavigationToolbar(canvas_figureName, self) # this is the Navigation widget, it takes the Canvas widget and a parent
         
+        plot_layout.addWidget(toolbar_figureName)         # this also needed to show the Navigation of plot
+        plot_layout.addWidget(canvas_figureName)          # add Canvas Widget(plot widget) onto tab_2
+
+    def plotFigure(self):
+        app = CARS()
+        app.plotPredata(self.dicBackground, self.plotUp)
+
+
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
