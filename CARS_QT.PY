@@ -143,11 +143,16 @@ class MyTableWidget(QWidget):
         self.tab2buttonPlotUp = QPushButton('Plot Back + Siganl')           #  Just some button connected to `plot` method 
         self.tab2buttonPlotUp.clicked.connect(self.test_fun(tab2Axes_Up, "Background and Singal"))
 
+        self.tab2_layout.addWidget(self.tab2buttonPlotUp)
+
+        self.tab2PlotDown = plt.figure("CARS --> SPET")
+        self.add_plotfigure(self.tab2PlotDown, self.tab2_layout)
+        self.tab2Axes_Down = self.tab2PlotDown.add_subplot(111)
 
         self.button_CARS2SPET = QPushButton('CARS --> SPET')           # Just some button connected to `plot` method
         self.button_CARS2SPET.clicked.connect(self.CARS2SPET) 
         
-        self.tab2_layout.addWidget(self.tab2buttonPlotUp)
+
         self.tab2_layout.addWidget(self.button_CARS2SPET)
 
 
@@ -190,7 +195,10 @@ class MyTableWidget(QWidget):
 
                 axes.plot(self.WN, self.signal, label = "signal")
                 axes.plot(self.WN, self.background, label = "background")
-
+            
+            elif dataName == "CARS --> SPET":
+                print("CARS --> SPET")
+                axes.plot(self.WN, self.spectrumAPC, label = "spectrumAPC")
                 pass
             
             
@@ -201,11 +209,26 @@ class MyTableWidget(QWidget):
         return inner_test_fun
 
     def CARS2SPET(self):
+        ## self.spectrumAPC : amplitude and phase correction
+        ## self.spectrumAC :  Just amplitude correction
 
-        self.finalPlot = plt.figure("CARS2SPET")
+        specturmMethod= KK_ALS_Spectral(self.signal/self.background)
 
-        self.finalAxes = self.finalPlot.add_subplot(111)
-        self.finalAxes.plot(self.backgroundData)
+        self.spectrumAPC, self.spectrumJAC = specturmMethod.ALS()
+
+        print("spectrumAPC  is :", self.spectrumAPC)
+
+        self.tab2Axes_Down.plot(self.WN, self.spectrumAPC, label = 'Phase Corrected + Scaling')
+        self.tab2Axes_Down.plot(self.WN, self.spectrumJAC, label = 'Baseline Detrended (only)')
+
+        self.tab2Axes_Down.legend()
+        self.tab2Axes_Down.set_xlabel('Wavenumber (cm$^{-1}$)')
+        self.tab2Axes_Down.set_ylabel('Spectrum (au)')
+
+
+        #self.test_fun(self.tab2Axes_Down, "CARS --> SPET")
+        print("the end of CARS2SPET")
+
 
         #self.finalAxes.figure.canvas.draw()
         #plt.draw()
